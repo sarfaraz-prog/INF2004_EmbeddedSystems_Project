@@ -14,8 +14,8 @@
  *    OLDEST queued message with QoS 1, and removes it from the queue only
  *    after the broker confirms it (FR-COM-12).
  *  - After each MQTT connect it subscribes to the command topic. A message
- *    "START", "STOP" or "RESET" (exact text) is stored for comms_get_command().
- *    Anything else is rejected and counted.
+ *    one byte (1 START, 2 STOP, 3 RESET, see data_layout.h) is stored for
+ *    comms_get_command(). Anything else is rejected and counted.
  *
  * Who touches what (this is why no mutex is needed):
  *   inbox       written by comms_send() (task A), read by comms_task()
@@ -39,10 +39,8 @@
 #include "status_led.h"
 #include "trans_queue.h"
 
-#define SUBSCRIBE_RETRY_MS 1000u
-#define KEEP_ALIVE_S     10u     /* to be tuned, see TEST_LOG.md */
 
-#define CMD_BUF_MAX      8u      /* longest valid command text is 5 bytes */
+#define CMD_BUF_MAX      DL_CMD_BYTES   /* a command is one byte */
 #define CMD_RING_SIZE    4u      /* holds 3 unread commands (one slot stays empty) */
 
 #define INBOX_N          8u      /* samples waiting to enter the queue */
@@ -73,9 +71,16 @@ static volatile uint8_t g_cmd_head = 0;
 static volatile uint8_t g_cmd_tail = 0;
 static volatile uint32_t g_cmds_accepted = 0;
 static volatile uint32_t g_cmds_rejected = 0;
+/* Stale-command gate (written only by comms_task and the lwIP callbacks, which run
+ * in the same context). Commands are accepted only after the subscribe is confirmed
+ * AND COMMS_CMD_SETTLE_MS later: a retained or replayed command arrives right after
+ * the subscribe and is ignored. Closed again whenever MQTT goes down. */
+static volatile bool     g_cmd_gate = false;
+static volatile uint32_t g_cmd_open_at = 0;
+static volatile uint32_t g_cmds_stale = 0;
 
 /* Incoming message being assembled (a message can arrive in pieces). */
-static char    g_in_buf[CMD_BUF_MAX];
+static uint8_t g_in_buf[CMD_BUF_MAX];
 static uint8_t g_in_len = 0;
 static bool    g_in_ok = false;      /* right topic and not too long so far */
 
@@ -100,7 +105,8 @@ static volatile uint32_t s_acked = 0;
 static volatile com_state_t s_state = COM_DISCONNECTED;
 /* Snapshots for comms_get_stats(), refreshed by comms_task(). */
 static volatile uint16_t s_snap_queued = 0;
-static volatile uint32_t s_snap_discarded = 0;
+static volatile bool s_wifi_up = false;           /* written by comms_task only */
+static volatile uint32_t s_snap_discarded = 0;   /* queue + inbox drops */
 
 /* ---------- helpers ---------- */
 uint32_t comms_now_ms(void)
@@ -169,14 +175,17 @@ static void indata_cb(void *arg, const u8_t *data, u16_t len, u8_t flags)
             g_cmds_rejected++;
         }
     }
+    if ((flags & MQTT_DATA_FLAG_LAST) && g_in_ok &&
+        (!g_cmd_gate || (int32_t)(comms_now_ms() - g_cmd_open_at) < 0)) {
+        g_cmds_stale++;                  /* too early after (re)subscribe: ignore */
+        g_cmds_rejected++;
+        g_in_ok = false;
+    }
     if ((flags & MQTT_DATA_FLAG_LAST) && g_in_ok) {
-        /* Exact match only: no spaces, no lower case, nothing extra. */
-        if (g_in_len == 5 && memcmp(g_in_buf, "START", 5) == 0) {
-            cmd_push(COMMS_CMD_START);
-        } else if (g_in_len == 4 && memcmp(g_in_buf, "STOP", 4) == 0) {
-            cmd_push(COMMS_CMD_STOP);
-        } else if (g_in_len == 5 && memcmp(g_in_buf, "RESET", 5) == 0) {
-            cmd_push(COMMS_CMD_RESET);
+        /* Exactly one byte, value 1-3; anything else is rejected. */
+        uint8_t c = telemetry_cmd_decode(g_in_buf, g_in_len);
+        if (c != 0u) {
+            cmd_push((comms_cmd_t)c);
         } else {
             g_cmds_rejected++;
         }
@@ -225,8 +234,12 @@ bool comms_init(const comms_config_t *cfg)
     return true;
 }
 
-int comms_send(const telemetry_sample_t *s)
+int comms_send(const telemetry_sample_t *in)
 {
+    static uint8_t  seq = 0u;            /* only touched here (one writer) */
+    static uint32_t last_lost = 0u;
+    telemetry_sample_t s;
+    uint32_t lost;
     uint8_t h;
     uint8_t next;
     int n;
@@ -234,17 +247,28 @@ int comms_send(const telemetry_sample_t *s)
     if (!s_ready) {
         return COMMS_ERR_NOT_READY;
     }
+    if (!in) {
+        return TELEM_ERR_ARG;
+    }
     h = s_in_head;
     next = (uint8_t)((h + 1u) % INBOX_N);
     if (next == s_in_tail) {             /* inbox full: drop this sample */
         s_inbox_drops++;
         return COMMS_ERR_BUSY;
     }
-    n = telemetry_format(s, (char *)s_inbox[h].data, TQ_MSG_MAX);
-    if (n <= 0) {
-        return (n < 0) ? n : TELEM_ERR_ARG;
+    /* Comms owns three fields; the caller's values for them are ignored. */
+    s = *in;
+    lost = s_snap_discarded;             /* includes s_inbox_drops */
+    s.drop = (lost != last_lost) ? 1u : 0u;   /* something was dropped since last sample */
+    last_lost = lost;
+    s.wifi_loss = s_wifi_up ? 0u : 1u;   /* Wi-Fi radio only (broker down is not Wi-Fi loss); status, never a fault */
+    s.seq = (uint8_t)(seq & DL_SEQ_MAX);
+    n = telemetry_pack(&s, s_inbox[h].data, TQ_MSG_MAX);
+    if (n != TELEM_OK) {
+        return n;                        /* value out of range: not sent */
     }
-    s_inbox[h].len = (uint16_t)n;
+    seq++;
+    s_inbox[h].len = (uint16_t)DL_FRAME_BYTES;
     PORT_MB();                           /* message first, then announce it */
     s_in_head = next;
     return COMMS_OK;
@@ -307,31 +331,38 @@ static void inbox_drain(void)
     }
 }
 
-void comms_task(void)
+/* What comms_task() remembers between calls. Only comms_task() and its helpers touch it. */
+static struct {
+    int         last_link;
+    const char *last_link_text;
+    int         last_mqtt_status;
+    bool        was_up;
+    bool        subscribed;
+    bool        sub_pending;
+    uint32_t    next_wifi_retry;
+    uint32_t    next_mqtt_try;
+    uint32_t    mqtt_attempt_since;
+    uint32_t    next_sub_try;
+    bool        inflight;
+    uint32_t    inflight_seq;
+    uint32_t    inflight_since;
+} ctx = { -99, NULL, -99, false, false, false, COMMS_RETRY_MS, 0, 0, 0, false, 0, 0 };
+
+/* Cut the MQTT connection and forget everything that depended on it.
+ * mqtt_disconnect() does not call any callback, so the flags are cleared here. */
+static void mqtt_drop(void)
 {
-    static int      last_link = -99;
-    static const char *last_link_text = NULL;
-    static int      last_mqtt_status = -99;
-    static bool     was_up = false;
-    static bool     subscribed = false;
-    static bool     sub_pending = false;
-    static uint32_t next_wifi_retry = COMMS_RETRY_MS;
-    static uint32_t next_mqtt_try = 0;
-    static uint32_t mqtt_attempt_since = 0;
-    static uint32_t next_sub_try = 0;
-    static int      inflight = 0;
-    static uint32_t inflight_seq = 0;
-    static uint32_t inflight_since = 0;
+    port_net_lock();
+    mqtt_disconnect(s_client);
+    port_net_unlock();
+    g_mqtt_up = 0;
+    g_mqtt_connecting = 0;
+    ctx.inflight = false;
+}
 
-    if (!s_ready) {
-        return;
-    }
-
-    uint32_t now = comms_now_ms();
-    int link = port_link();
-    bool up = (link == PORT_LINK_UP);
-
-    /* ---- the MQTT client is created on the first call (lwIP must be up) ---- */
+/* The MQTT client is created on the first call (lwIP must be up). */
+static bool client_ready(void)
+{
     if (s_client == NULL) {
         port_net_lock();
         s_client = mqtt_client_new();
@@ -341,48 +372,47 @@ void comms_task(void)
         port_net_unlock();
         if (s_client == NULL) {
             LOG("comms: mqtt_client_new failed\n");
-            return;
+            return false;
         }
     }
+    return true;
+}
 
-    inbox_drain();
+/* Wi-Fi: log changes, drop MQTT when the link goes, retry the join every 5 s. */
+static void wifi_step(uint32_t now, int link, bool up)
+{
+    const char *txt = port_link_text();
 
-    /* ---- WiFi ---- */
-    {
-        const char *txt = port_link_text();
-        if (link != last_link || txt != last_link_text) {
-            if (txt[0] != '\0') {          /* micro T-Kernel: the WiFi task logs it itself */
-                LOG("[%u ms] WiFi link: %s\n", (unsigned)now, txt);
-            }
-            last_link = link;
-            last_link_text = txt;
+    if (link != ctx.last_link || txt != ctx.last_link_text) {
+        if (txt[0] != '\0') {          /* micro T-Kernel: the WiFi task logs it itself */
+            LOG("[%u ms] WiFi link: %s\n", (unsigned)now, txt);
         }
+        ctx.last_link = link;
+        ctx.last_link_text = txt;
     }
-    if (up && !was_up) {
+    if (up && !ctx.was_up) {
         LOG("[%u ms] WiFi UP\n", (unsigned)now);
-        next_mqtt_try = now;
+        ctx.next_mqtt_try = now;
     }
-    if (!up && was_up) {
+    if (!up && ctx.was_up) {
         LOG("[%u ms] WiFi LOST\n", (unsigned)now);
-        next_wifi_retry = now;
-        port_net_lock();
-        mqtt_disconnect(s_client);
-        port_net_unlock();
-        g_mqtt_up = 0;
-        g_mqtt_connecting = 0;
-        inflight = 0;
+        ctx.next_wifi_retry = now;
+        mqtt_drop();
     }
-    was_up = up;
+    ctx.was_up = up;
 
-    if (link == PORT_LINK_DOWN && now >= next_wifi_retry) {
+    if (link == PORT_LINK_DOWN && now >= ctx.next_wifi_retry) {
         if (port_wifi_join(&s_cfg)) {
             LOG("[%u ms] retrying WiFi...\n", (unsigned)now);
         }
-        next_wifi_retry = now + COMMS_RETRY_MS;
+        ctx.next_wifi_retry = now + COMMS_RETRY_MS;
     }
+}
 
-    /* ---- MQTT connect / retry (every 5 s, FR-COM-02) ---- */
-    if (up && !g_mqtt_up && !g_mqtt_connecting && now >= next_mqtt_try) {
+/* MQTT connect / retry (every 5 s, FR-COM-02). */
+static void mqtt_connect_step(uint32_t now, bool up)
+{
+    if (up && !g_mqtt_up && !g_mqtt_connecting && now >= ctx.next_mqtt_try) {
         ip_addr_t broker;
         if (!ipaddr_aton(s_cfg.broker_ip, &broker)) {
             LOG("[%u ms] broker_ip is not a valid address\n", (unsigned)now);
@@ -394,101 +424,126 @@ void comms_task(void)
             LOG("[%u ms] MQTT connect started (err=%d)\n", (unsigned)now, (int)e);
             if (e == ERR_OK) {
                 g_mqtt_connecting = 1;
-                mqtt_attempt_since = now;
+                ctx.mqtt_attempt_since = now;
             }
         }
-        next_mqtt_try = now + COMMS_RETRY_MS;
+        ctx.next_mqtt_try = now + COMMS_RETRY_MS;
     }
     /* An attempt not finished after 5 s is cancelled so the next one can
-     * start (lwIP would otherwise wait about 18 s). mqtt_disconnect() does
-     * not call the callback, so the flag is cleared here. */
-    if (g_mqtt_connecting && (now - mqtt_attempt_since) > COMMS_RETRY_MS) {
-        port_net_lock();
-        mqtt_disconnect(s_client);
-        port_net_unlock();
-        g_mqtt_connecting = 0;
-        next_mqtt_try = now;
+     * start (lwIP would otherwise wait about 18 s). */
+    if (g_mqtt_connecting && (now - ctx.mqtt_attempt_since) > COMMS_RETRY_MS) {
+        mqtt_drop();
+        ctx.next_mqtt_try = now;
         LOG("[%u ms] MQTT attempt timed out, retrying\n", (unsigned)now);
     }
-    if (g_mqtt_status != last_mqtt_status) {
-        LOG("[%u ms] MQTT status: %d (0 = connected)\n",
-            (unsigned)now, g_mqtt_status);
-        last_mqtt_status = g_mqtt_status;
+    if (g_mqtt_status != ctx.last_mqtt_status) {
+        LOG("[%u ms] MQTT status: %d (0 = connected)\n", (unsigned)now, g_mqtt_status);
+        ctx.last_mqtt_status = g_mqtt_status;
     }
+}
 
-    /* ---- subscribe to the command topic after every connect ---- */
+/* Subscribe to the command topic after every connect; open the command gate later. */
+static void subscribe_step(uint32_t now)
+{
     if (!g_mqtt_up) {
-        subscribed = false;
-        sub_pending = false;
-        next_sub_try = 0;      /* subscribe at once after the next connect */
+        g_cmd_gate = false;              /* no commands until subscribed again + settle time */
+        ctx.subscribed = false;
+        ctx.sub_pending = false;
+        ctx.next_sub_try = 0;              /* subscribe at once after the next connect */
     }
     if (g_sub_done) {
         g_sub_done = 0;
-        sub_pending = false;
+        ctx.sub_pending = false;
         if (g_sub_err == ERR_OK) {
-            subscribed = true;
+            ctx.subscribed = true;
+            g_cmd_open_at = now + COMMS_CMD_SETTLE_MS;
+            PORT_MB();
+            g_cmd_gate = true;
             LOG("[%u ms] subscribed to %s\n", (unsigned)now, COMMS_TOPIC_CMD);
         }
     }
-    if (g_mqtt_up && !subscribed && !sub_pending && now >= next_sub_try) {
+    if (g_mqtt_up && !ctx.subscribed && !ctx.sub_pending && now >= ctx.next_sub_try) {
         port_net_lock();
         err_t e = mqtt_subscribe(s_client, COMMS_TOPIC_CMD, 1, sub_cb, NULL);
         port_net_unlock();
         if (e == ERR_OK) {
-            sub_pending = true;
+            ctx.sub_pending = true;
         }
-        next_sub_try = now + SUBSCRIBE_RETRY_MS;
+        ctx.next_sub_try = now + SUBSCRIBE_RETRY_MS;
     }
+}
 
-    /* ---- publish the oldest queued message, one at a time ---- */
+/* Publish the oldest queued message, one at a time; remove it only after the broker acks. */
+static void publish_step(uint32_t now)
+{
     if (g_pub_done) {
         g_pub_done = 0;
         /* Only the answer for the message we are waiting for counts. */
-        if (inflight && g_pub_seq == inflight_seq) {
-            inflight = 0;
+        if (ctx.inflight && g_pub_seq == ctx.inflight_seq) {
+            ctx.inflight = false;
             if (g_pub_err == ERR_OK) {
-                (void)tq_ack_oldest(inflight_seq);   /* broker confirmed */
+                (void)tq_ack_oldest(ctx.inflight_seq);   /* broker confirmed */
                 s_acked++;
             }
         }
     }
-    if (inflight && (now - inflight_since) > COMMS_ACK_TIMEOUT_MS) {
-        /* The broker did not answer a QoS 1 publish in time: treat the link
-         * as lost (FR-COM-01). The queue keeps the message; it is sent again
-         * after the reconnect. mqtt_disconnect() drops the pending request
-         * without calling any callback. */
+    if (ctx.inflight && (now - ctx.inflight_since) > COMMS_ACK_TIMEOUT_MS) {
+        /* No answer to a QoS 1 publish in time: treat the link as lost (FR-COM-01).
+         * The queue keeps the message; it is sent again after the reconnect. */
         LOG("[%u ms] no ack in %u ms: link lost, reconnecting\n",
             (unsigned)now, (unsigned)COMMS_ACK_TIMEOUT_MS);
-        port_net_lock();
-        mqtt_disconnect(s_client);
-        port_net_unlock();
-        g_mqtt_up = 0;
-        g_mqtt_connecting = 0;
-        inflight = 0;
-        next_mqtt_try = now;
+        mqtt_drop();
+        ctx.next_mqtt_try = now;
     }
-    if (g_mqtt_up && !inflight) {
-        if (tq_peek_oldest(&s_msg) == TQ_OK) {
-            port_net_lock();
-            err_t e = mqtt_publish(s_client, COMMS_TOPIC_TELEMETRY, s_msg.data, s_msg.len,
-                                   1, 0, pub_cb, (void *)(uintptr_t)s_msg.seq);
-            port_net_unlock();
-            if (e == ERR_OK) {
-                inflight = 1;
-                inflight_seq = s_msg.seq;
-                inflight_since = now;
-            }
+    if (g_mqtt_up && !ctx.inflight && tq_peek_oldest(&s_msg) == TQ_OK) {
+        port_net_lock();
+        err_t e = mqtt_publish(s_client, COMMS_TOPIC_TELEMETRY, s_msg.data, s_msg.len,
+                               1, 0, pub_cb, (void *)(uintptr_t)s_msg.seq);
+        port_net_unlock();
+        if (e == ERR_OK) {
+            ctx.inflight = true;
+            ctx.inflight_seq = s_msg.seq;
+            ctx.inflight_since = now;
         }
     }
+}
 
-    /* ---- COM state and snapshots for the other tasks ---- */
+/* COM state and snapshots for the other tasks. */
+static void state_step(bool up)
+{
     com_inputs_t in;
+
     in.wifi_up = up;
     in.mqtt_up = (g_mqtt_up != 0);
     in.queue_empty = (tq_count() == 0u);
     s_state = com_update(&in);
     s_snap_queued = tq_count();
     s_snap_discarded = tq_discarded() + s_inbox_drops;
+}
+
+void comms_task(void)
+{
+    uint32_t now;
+    int link;
+    bool up;
+
+    if (!s_ready) {
+        return;
+    }
+    now = comms_now_ms();
+    link = port_link();
+    up = (link == PORT_LINK_UP);
+    s_wifi_up = up;
+
+    if (!client_ready()) {
+        return;
+    }
+    inbox_drain();
+    wifi_step(now, link, up);
+    mqtt_connect_step(now, up);
+    subscribe_step(now);
+    publish_step(now);
+    state_step(up);
 }
 
 #else /* !COMMS_HAVE_NET : micro T-Kernel build without NET=lwip MQTT=1 */

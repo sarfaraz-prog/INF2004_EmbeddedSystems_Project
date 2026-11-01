@@ -12,22 +12,27 @@
  *   comms_now_ms()         milliseconds since comms_init(), for ts
  *   comms_task()           the network work: reconnect, send, receive
  *
-  * WHO CALLS WHAT
+ * WHO CALLS WHAT
  *
- *   The team build is the plain Pico SDK with one polled main loop.
- *     - comms_init() is called once at start-up.
- *     - comms_task() is called every ~10 ms. It is the only function that
- *       touches lwIP. It never blocks.
- *     - comms_send() is called by the telemetry code, about once per second.
- *     - comms_led_task() is called every ~10 ms.
- *     - comms_get_command() is called by the Nav code, at least every 20 ms.
- *     - comms_get_state() and comms_get_stats() can be called from anywhere.
- *   See testing/subsystem1/bench/buddy1_mqtt.c for a working loop.
-  * WHY THE SPLIT: comms_send() only puts the message in a small inbox (lock
+ *   micro T-Kernel build (the team's base):
+ *     - comms_task() is called by the WiFi task (cyw43_utk_task). That task is
+ *       the only owner of lwIP, so all network work happens there. YOU DO NOT
+ *       CALL comms_task().
+ *     - comms_init() is called once from subsystem1_init().
+ *     - comms_send(), comms_led_task() are called from Telemetry_Comms_Task
+ *       (one task only).
+ *     - comms_get_command() is called by the Nav task (one task only).
+ *     - comms_get_state() and comms_get_stats() can be called from any task.
+ *
+ *   Plain Pico SDK bench build (testing/subsystem1/bench):
+ *     - one loop calls comms_send(), comms_task(), comms_led_task() and
+ *       comms_get_command() every ~10 ms.
+ *
+ * WHY THE SPLIT: comms_send() only puts the message in a small inbox (lock
  * free, never blocks). comms_task() moves it into the 100-message queue and
- * sends it. So the sending code and comms_task() never share the queue and
- * need no mutex when they run in different tasks. Likewise the commands go
- * from comms_task() to comms_get_command() through a small ring.
+ * sends it. So the sending task and the WiFi task never share the queue and
+ * need no mutex. Likewise the commands go from comms_task() to
+ * comms_get_command() through a small ring.
  *
  * Rules:
  *  - comms_send(): ONE task only. comms_get_command(): ONE task only.
@@ -38,8 +43,8 @@
  *
  * The pure logic is in trans_queue, com_state, status_led and telemetry,
  * which are tested on a PC. comms.c (the engine) is tested on a PC with a
- * fake radio and a fake broker. The only part that touches real hardware is
- * the small port, bench/comms_port_sdk.c.
+ * fake radio and a fake broker. The two small "ports" (comms_port_utk.c and
+ * bench/comms_port_sdk.c) are the only parts that touch real hardware.
  */
 #ifndef COMMS_H
 #define COMMS_H
@@ -55,11 +60,15 @@
 #define COMMS_TOPIC_CMD        "robocar/car1/cmd"          /* broker -> car */
 
 #define COMMS_RETRY_MS   5000u   /* FR-COM-02: retry every 5 s */
-#define COMMS_ACK_TIMEOUT_MS 3000u  /* FR-COM-01: no broker ack in 3 s = link lost.
-                                    * 0.9 s gave false "link lost" about once per 40 s
-                                    * on the bench WiFi (late acks), 3 s gave 1 in 10 min.
+#define SUBSCRIBE_RETRY_MS 1000u /* retry a failed subscribe after 1 s */
+#define KEEP_ALIVE_S     10u     /* MQTT keep-alive; the requirement says 1 s, see Version C */
+#define COMMS_ACK_TIMEOUT_MS 3000u  /* FR-COM-01: no broker ack in 0.9 s = link lost.
                                     * A sample is published at least once a second,
-                                    * so the link loss is seen within about 1 s + 3 s. */
+                                    * so the link loss is seen within about 1 s + 0.9 s. */
+
+#define COMMS_CMD_SETTLE_MS 300u   /* commands in the first 300 ms after subscribing are
+                                    * ignored (stale retained/replayed START). A real
+                                    * command sent in this window is lost too: resend it. */
 
 /* comms_send() results */
 #define COMMS_OK              0
@@ -84,7 +93,9 @@ typedef struct {
     const char *password;        /* NULL = anonymous */
 } comms_config_t;
 /* The strings are not copied. They must stay valid while the car runs.
-   * comms_init() only checks them. comms_task() starts the join. */
+ * On the micro T-Kernel build the WiFi task joins the network itself with
+ * WIFI_SSID / WIFI_PASSWORD from config/wifi_secrets.h, so wifi_ssid and
+ * wifi_password are only checked, not used. */
 
 typedef struct {
     uint32_t sent_acked;      /* messages the broker has confirmed */
@@ -121,7 +132,7 @@ void comms_led_task(void);
 com_state_t comms_get_state(void);
 void        comms_get_stats(comms_stats_t *out);
 
-/* Milliseconds since comms_init(). Use it for telemetry_sample_t.ts_ms. */
+/* Milliseconds since comms_init(). (Not sent: the frame has no timestamp.) */
 uint32_t comms_now_ms(void);
 
 #endif /* COMMS_H */

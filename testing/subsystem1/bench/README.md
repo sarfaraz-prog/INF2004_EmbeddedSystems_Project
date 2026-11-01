@@ -54,9 +54,9 @@ drive. Open the serial monitor at 115200.
 
 | # | Do this | Expected | Test ID |
 |---|---|---|---|
-| 1 | In PowerShell: `& "C:\Program Files\mosquitto\mosquitto_sub.exe" -h localhost -t "robocar/#" -v` | one JSON line per second on `robocar/car1/telemetry` | S1-H10, S1-H11 |
-| 2 | `& "C:\Program Files\mosquitto\mosquitto_pub.exe" -h localhost -t robocar/car1/cmd -m START` (also `STOP`, `RESET`) | serial: `COMMAND RECEIVED: START` | S1-H12 |
-| 3 | Send `-m start` and `-m GO` | `cmds_bad` goes up, no command | S1-H12 |
+| 1 | On the laptop: `pip install paho-mqtt` (once), then `python tools\decode_frame.py --live --log frames.txt` | one decoded line per second, each `9 bytes`; speed, dist, dir equal the `TX` lines on the serial monitor; `seq` counts 0-15 | S1-H10, S1-H11, S1-H20 |
+| 2 | `python tools\make_cmd_files.py` (once), then `& "C:\Program Files\mosquitto\mosquitto_pub.exe" -h localhost -t robocar/car1/cmd -f start.bin` (also `stop.bin`, `reset.bin`) | serial: `COMMAND RECEIVED: START` | S1-H12, S1-H21 |
+| 3 | Send `-f bad0.bin`, `-f bad4.bin`, `-f two_bytes.bin`, `-f old_text_start.bin` | `cmds_bad` goes up by 1 each, no command | S1-H22 |
 | 4 | Stop the broker (Ctrl+C), wait 20 s, start it again | state DISCONNECTED, LED blinks, queue grows, then all queued messages arrive in order and `queue=0` | S1-H13 |
 | 5 | Leave it running for 10 minutes | count the link-lost events on the serial monitor | S1-H14 |
 | 6 | Switch the hotspot off, then on | state DISCONNECTED within about 4 s (note the real time), then it reconnects | not done yet |
@@ -79,7 +79,7 @@ password from the saved files before committing.
 - The hotspot-off test (row 6) is not done, so the real detection time is unknown.
   The PC test gives 4.0 s worst case on a fake clock.
 - The broker is anonymous and plain TCP (no NFR-SEC-01 or NFR-SEC-02).
-- `bat` is a fake value (7420) in the bench. In the real car it is 0 until a battery
-  source exists.
-- QoS 1 can deliver a duplicate message after a reconnect. The receiver should ignore a
-  repeated `ts`.
+- The sample values in the bench are fake. The frame has no battery voltage, distance or
+  timestamp.
+- QoS 1 can deliver a duplicate message after a reconnect. The receiver should ignore a repeated sequence number
+  (4 bits, wraps every 16); the frame has no timestamp.

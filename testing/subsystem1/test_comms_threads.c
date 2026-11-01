@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "fake_port.h"
+#include "sample_id.h"
 #include "../../app_program/subsystem1/comms.c"
 
 #define N_SAMPLES  200000u
@@ -41,16 +42,15 @@ static volatile int push_cmds_done = 0;
  * and pushes commands in like the lwIP callback would. */
 static void *wifi_task(void *arg)
 {
-    static const char *texts[3] = { "START", "STOP", "RESET" };
     (void)arg;
     while (!stop_b) {
         fk_now_ms++;
         comms_task();
         /* the broker confirms the message that was just published */
         if (fk_publishes > 0 && fk_pub_cb != NULL && fk_pub_arg != NULL) {
-            unsigned ts = 0;
-            if (sscanf(fk_pub_payload, "{\"ts\":%u,\"state\":\"TEST\",\"spd\":250", &ts) != 1) {
-                pub_bad_text++;
+            uint32_t ts = 0;
+            if (!sid_get(fk_pub_payload, fk_pub_len, &ts)) {
+                pub_bad_text++;                      /* not a valid 9-byte frame */
             }
             mqtt_request_cb_t cb = fk_pub_cb;
             void *a = fk_pub_arg;
@@ -63,11 +63,13 @@ static void *wifi_task(void *arg)
         }
         /* commands: push only when there is room (a full ring would drop, which is tested elsewhere) */
         if (cmds_pushed < N_CMDS) {
+            /* commands are only accepted once the 300 ms settle time after subscribing is over */
+            if (!g_cmd_gate || (int32_t)(comms_now_ms() - g_cmd_open_at) < 0) { continue; }
             uint8_t next = (uint8_t)((g_cmd_head + 1u) % CMD_RING_SIZE);
             if (next != g_cmd_tail) {
-                const char *t = texts[cmds_pushed % 3u];
-                inpub_cb(NULL, COMMS_TOPIC_CMD, (u32_t)strlen(t));
-                indata_cb(NULL, (const u8_t *)t, (u16_t)strlen(t), MQTT_DATA_FLAG_LAST);
+                uint8_t t = (uint8_t)(DL_CMD_START + cmds_pushed % 3u);   /* 1,2,3 */
+                inpub_cb(NULL, COMMS_TOPIC_CMD, 1u);
+                indata_cb(NULL, &t, 1u, MQTT_DATA_FLAG_LAST);
                 cmds_pushed++;
             }
         } else {
@@ -103,9 +105,8 @@ int main(void)
         if (sent < N_SAMPLES && (sent - pub_count) < 40u) {
             telemetry_sample_t s;
             memset(&s, 0, sizeof s);
-            s.ts_ms = sent + 1u;
-            strcpy(s.state, "TEST");
-            s.speed_mm_s = 250;
+            s.state = DL_STATE_LINE_FOLLOWING;
+            sid_set(&s, sent + 1u);
             int r = comms_send(&s);
             if (r == COMMS_OK) { sent++; }
             else if (r == COMMS_ERR_BUSY) { busy++; s_inbox_drops--; /* retry: not a real loss */ }
@@ -130,7 +131,7 @@ int main(void)
     CHECK(sent == N_SAMPLES, "200000 samples accepted by comms_send");
     CHECK(pub_count == N_SAMPLES, "all 200000 reached the broker (none lost)");
     CHECK(pub_bad_order == 0 && pub_gaps == 0, "in strict order, no gaps (none repeated, reordered or missing)");
-    CHECK(pub_bad_text == 0, "every message text intact (none corrupted)");
+    CHECK(pub_bad_text == 0, "every frame valid (9 bytes, right version) (none corrupted)");
     CHECK(st.discarded == 0, "nothing discarded in the queue");
     CHECK(cmds_got == N_CMDS && cmd_bad_order == 0, "100000 commands received, in order, none lost");
 

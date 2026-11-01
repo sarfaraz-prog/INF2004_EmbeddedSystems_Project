@@ -6,7 +6,7 @@
  *   - the COM state changes as expected (FR-COM-03, 04, 01)
  *   - the on-board LED is solid ON in COM_SYNC / COM_CONNECTED and blinks at
  *     2 Hz in COM_DISCONNECTED (FR-COM-05, 06)
- *   - the telemetry message is formatted correctly on the target (FR-COM-07)
+ *   - the telemetry frame is packed correctly on the target (FR-COM-07)
  *
  * Fake link timeline, repeating every 16 s:
  *    0 -  6 s  link down                      -> COM_DISCONNECTED (blink)
@@ -88,21 +88,24 @@ int main(void)
 
         if (now >= next_report) {
             telemetry_sample_t s;
-            char msg[TELEM_MSG_MAX];
+            uint8_t frame[DL_FRAME_BYTES];
             int n;
 
             memset(&s, 0, sizeof s);
-            s.ts_ms = now;
-            strcpy(s.state, "BENCH");
-            s.speed_mm_s = 250;
-            s.distance_mm = (int32_t)(now / 4u);
-            s.heading_deg_x10 = 905;
-            s.battery_mv = 7420;
+            s.state = DL_STATE_CALIBRATE;
+            s.speed = 25;
+            s.dist = (uint8_t)((now / 100u) % 63u);
+            s.dir = 90;
+            s.tilt = 0;
+            s.roll = 0;
 
-            n = telemetry_format(&s, msg, sizeof msg);
-            printf("[%6lu ms] LED=%d blinks_so_far=%lu msg(%d)=%s\n",
-                   (unsigned long)now, (int)level,
-                   (unsigned long)rising_edges, n, (n > 0) ? msg : "ERROR");
+            n = telemetry_pack(&s, frame, sizeof frame);
+            printf("[%6lu ms] LED=%d blinks_so_far=%lu pack=%d frame=",
+                   (unsigned long)now, (int)level, (unsigned long)rising_edges, n);
+            for (unsigned i = 0; (n == TELEM_OK) && (i < DL_FRAME_BYTES); i++) {
+                printf("%02X", (unsigned)frame[i]);
+            }
+            printf("\n");
             next_report += REPORT_MS;
         }
 

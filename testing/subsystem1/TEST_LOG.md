@@ -15,8 +15,8 @@ Test IDs never change and are never reused.
 | S1-U05 | oldest message is now number 2 | FR-COM-10 | auto | `testing/subsystem1/test_trans_queue.c` |
 | S1-U06 | discard counter keeps counting | FR-COM-11 | auto | `testing/subsystem1/test_trans_queue.c` |
 | S1-U07 | NULL pointer and zero length are rejected | robustness | auto | `testing/subsystem1/test_trans_queue.c` |
-| S1-U08 | 257-byte message rejected (NFR-RES-03) | NFR-RES-03 | auto | `testing/subsystem1/test_trans_queue.c` |
-| S1-U09 | exactly 256 bytes accepted (NFR-RES-03) | NFR-RES-03 | auto | `testing/subsystem1/test_trans_queue.c` |
+| S1-U08 | 10-byte message rejected (the frame is 9 bytes; was 257 bytes with the old text message) | NFR-RES-03 | auto | `testing/subsystem1/test_trans_queue.c` |
+| S1-U09 | exactly 9 bytes accepted (was 256 with the old text message) | NFR-RES-03 | auto | `testing/subsystem1/test_trans_queue.c` |
 | S1-U10 | ack of a message that was already dropped is refused | FR-COM-12 | auto | `testing/subsystem1/test_trans_queue.c` |
 | S1-U11 | a refused ack does not reset the discard counter | FR-COM-12 | auto | `testing/subsystem1/test_trans_queue.c` |
 | S1-U12 | 100 messages sent oldest first, in order | FR-COM-03, FR-COM-04 | auto | `testing/subsystem1/test_trans_queue.c` |
@@ -45,18 +45,18 @@ Test IDs never change and are never reused.
 | S1-U44 | 20 blinks (40 changes) in 10 s = 2 Hz (FR-COM-06) | FR-COM-06 | auto | `testing/subsystem1/test_status_led.c` |
 | S1-U45 | 50% duty cycle over 10 s | FR-COM-06 | auto | `testing/subsystem1/test_status_led.c` |
 | S1-U46 | unknown state: LED off | robustness | auto | `testing/subsystem1/test_status_led.c` |
-| S1-U50 | normal sample gives the expected message (FR-COM-07/09/13) | FR-COM-07, FR-COM-09, FR-COM-13 | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U51 | message is at most 256 bytes (NFR-RES-03) | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U52 | worst-case values still fit in 256 bytes | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U53 | negative values are written correctly | FR-COM-07 | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U54 | all-zero sample works | FR-COM-07 | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U55 | buffer with room for the end marker works | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U56 | buffer one byte too small is refused | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U57 | small buffer: nothing written past its end | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U58 | NULL pointers and size 0 are rejected | robustness | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U59 | state name with a quote is rejected | robustness | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U60 | empty state name is rejected | robustness | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-U61 | state name without an end marker is rejected | robustness | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U50 | normal sample gives the expected message (FR-COM-07/09/13) **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | FR-COM-07, FR-COM-09, FR-COM-13 | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U51 | message is at most 256 bytes (NFR-RES-03) **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U52 | worst-case values still fit in 256 bytes **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U53 | negative values are written correctly **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | FR-COM-07 | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U54 | all-zero sample works **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | FR-COM-07 | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U55 | buffer with room for the end marker works **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U56 | buffer one byte too small is refused **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U57 | small buffer: nothing written past its end **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U58 | NULL pointers and size 0 are rejected **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U59 | state name with a quote is rejected **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U60 | empty state name is rejected **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-U61 | state name without an end marker is rejected **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto | `testing/subsystem1/test_telemetry.c` |
 | S1-S01 | power-up with no link: COM_DISCONNECTED | FR-COM-03 | auto | `testing/subsystem1/test_scenario.c` |
 | S1-S02 | COM_DISCONNECTED: LED is blinking | FR-COM-06 | auto | `testing/subsystem1/test_scenario.c` |
 | S1-S03 | 3 samples while offline: stored, none sent | FR-COM-09 | auto | `testing/subsystem1/test_scenario.c` |
@@ -80,20 +80,20 @@ Test IDs never change and are never reused.
 | S1-H07 | LED solid ON when connected, blinking when broker stopped (by eye) | FR-COM-05, FR-COM-06 | manual (Pico W) | `testing/subsystem1/bench/buddy1_mqtt.c` |
 | S1-H08 | LED blink rate 2 Hz within 10% (59 blinks in 30 s = 1.97 Hz) | FR-COM-06 | manual (Pico W) | `testing/subsystem1/bench/buddy1_mqtt.c` |
 | S1-D01 | empty at start | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D02 | START accepted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D03 | STOP accepted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D04 | RESET accepted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D02 | byte 1 = START accepted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D03 | byte 2 = STOP accepted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D04 | byte 3 = RESET accepted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
 | S1-D05 | each command returned once | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D06 | bad text gives no command | FR-COM-08, NFR-SEC-01 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D07 | 6 bad messages counted | FR-COM-08, NFR-SEC-01 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D08 | other topic ignored | robustness | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D09 | other topic not counted as bad command | robustness | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D10 | fragmented STOP accepted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D11 | ring full: 3 kept, 1 dropped and counted | robustness | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D12 | kept in order | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D13 | then empty | robustness | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D14 | same-length wrong texts give no command | FR-COM-08, NFR-SEC-01 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
-| S1-D15 | 7 wrong texts counted as rejected | FR-COM-08, NFR-SEC-01 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D06 | bad bytes (0, 4, 255, 2 bytes, empty) give no command | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D07 | 5 bad messages counted as rejected | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D08 | other topic ignored | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D09 | other topic not counted as a bad command | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D10 | old text commands (START, S) rejected | Change requirement (binary commands) | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D11 | 2-byte message arriving in pieces rejected | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D12 | ring full: 3 kept, 1 dropped and counted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D13 | kept in order | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D14 | then empty | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
+| S1-D15 | command codes in comms.h equal the wire codes in data_layout.h | Change requirement (binary commands) | auto (fakes) | `testing/subsystem1/test_comms_cmd.c` |
 | S1-C01 | send before init is refused (NOT_READY) | robustness | auto (fakes) | `testing/subsystem1/test_comms_task.c` |
 | S1-C02 | comms_task before init does nothing | robustness | auto (fakes) | `testing/subsystem1/test_comms_task.c` |
 | S1-C03 | init succeeds | FR-COM-02 | auto (fakes) | `testing/subsystem1/test_comms_task.c` |
@@ -151,20 +151,65 @@ Test IDs never change and are never reused.
 | S1-C55 | 500 samples at 1 per task call: none lost | FR-COM-09 | auto (fakes) | `testing/subsystem1/test_comms_task.c` |
 | S1-C56 | every lwIP call was made with the port lock held | NFR-MNT-02 | auto (fakes) | `testing/subsystem1/test_comms_task.c` |
 | S1-C57 | lock and unlock are always paired | NFR-MNT-02 | auto (fakes) | `testing/subsystem1/test_comms_task.c` |
-| S1-T01 | 200000 random samples: same text as snprintf | NFR-RES-03 | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T02 | min/max values: same text as snprintf | NFR-RES-03 | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T03 | all zero: same text as snprintf | NFR-RES-03 | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T04 | sizes 1..120: right result, nothing written past the buffer | NFR-RES-03 | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T05 | NULL sample refused | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T06 | NULL buffer refused | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T07 | size 0 refused | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T08 | quote in state name refused | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T09 | empty state name refused | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
-| S1-T10 | state name without end marker refused | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T01 | 200000 random samples: same text as snprintf **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T02 | min/max values: same text as snprintf **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T03 | all zero: same text as snprintf **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T04 | sizes 1..120: right result, nothing written past the buffer **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | NFR-RES-03 | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T05 | NULL sample refused **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T06 | NULL buffer refused **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T07 | size 0 refused **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T08 | quote in state name refused **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T09 | empty state name refused **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-T10 | state name without end marker refused **(RETIRED 2026-11-01: the text message was replaced by the binary frame; test deleted)** | robustness | auto (PC) | `testing/subsystem1/test_telemetry_nolibc.c` |
+| S1-B01 | all-minimum values round trip | Minimum-Bit change | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B02 | all-maximum values round trip | Minimum-Bit change | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B03 | invalid codes round trip | Version C: invalid code per field | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B04 | known frame A matches (made by an independent Python encoder) | Minimum-Bit change | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B05 | known frame B matches (independent encoder) | Minimum-Bit change | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B06 | state 8 rejected (one beyond the limit) | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B07 | speed 64 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B08 | distance 64 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B09 | direction 360 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B10 | hump height 129 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B11 | tilt 181 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B12 | roll -181 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B13 | sequence 16 rejected | Version C: sequence number | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B14 | 1-bit flag value 2 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B15 | setting one field does not change its neighbours | NFR-MNT-02 (packed data) | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B16 | NULL pointer or 8-byte buffer rejected | robustness | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B17 | wrong version byte rejected | Minimum-Bit change (version byte) | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B18 | wrong frame length rejected | robustness | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B19 | command byte 2 = STOP | Change requirement (binary commands) | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B20 | command byte 0 rejected | Change requirement (binary commands) | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B21 | command byte 4 rejected | Change requirement (binary commands) | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B22 | wrong length or NULL command rejected | robustness | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-L01 | layout: fields add up to 57 bits, status + sequence 7 bits, total 64, frame 9 bytes, no overlaps | Minimum-Bit change, Version C (one shared header) | auto | `testing/subsystem1/test_data_layout.c` |
+| S1-F01 | send accepted | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-F02 | first frame has sequence 0 (caller's value ignored) | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-F03 | Wi-Fi loss flag set while Wi-Fi is down | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-F04 | drop flag 0 when nothing was dropped (caller's value ignored) | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-F05 | sequence counts 0-15 and wraps | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-F06 | drop flag set on the first frame after a drop | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-F07 | drop flag clears when nothing new was dropped | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-F08 | out-of-range value refused, not sent | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-F09 | refused sample did not enter the inbox | Version C: sequence + drop flag, FR-COM-10/11 | auto (fakes) | `testing/subsystem1/test_comms_frame.c` |
+| S1-V01 | Wi-Fi down at start: Wi-Fi loss flag = 1 | Version B: Wi-Fi loss is a status bit | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V02 | Wi-Fi up, broker not reached: Wi-Fi loss flag = 0 | Version C: broker-down vs Wi-Fi-down | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V03 | command before the subscribe is confirmed is ignored and counted | Version C: command freshness | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V04 | (helper check: nothing queued yet) | - | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V05 | retained START right after subscribe is ignored | Version C: stale/retained START | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V06 | fresh command after the 300 ms settle time is accepted | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V07 | broker down, Wi-Fi up: COM state DISCONNECTED but Wi-Fi loss flag = 0 | Version C: broker-down vs Wi-Fi-down | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V08 | command while the broker is down is ignored | Version C: command freshness | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V09 | stale START replayed after a reconnect is ignored | Version C: stale/retained START | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V10 | a new START after the settle time works | FR-COM-08 | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V11 | Wi-Fi down: Wi-Fi loss flag = 1 | Version B: Wi-Fi loss is a status bit | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V12 | command while Wi-Fi is down is ignored | Version C: command freshness | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
+| S1-V13 | link loss only changes the COM state and the status bit (never a fault) | Version B: not in FAULT_STOP | auto (fakes) | `testing/subsystem1/test_comms_fresh.c` |
 | S1-R01 | 200000 samples accepted by comms_send | NFR-MNT-02, FR-COM-12 | auto (2 threads) | `testing/subsystem1/test_comms_threads.c` |
 | S1-R02 | all 200000 reached the broker (none lost) | NFR-MNT-02, FR-COM-12 | auto (2 threads) | `testing/subsystem1/test_comms_threads.c` |
 | S1-R03 | in strict order, no gaps (none repeated, reordered or missing) | NFR-MNT-02, FR-COM-12 | auto (2 threads) | `testing/subsystem1/test_comms_threads.c` |
-| S1-R04 | every message text intact (none corrupted) | NFR-MNT-02, FR-COM-12 | auto (2 threads) | `testing/subsystem1/test_comms_threads.c` |
+| S1-R04 | every frame valid: 9 bytes, right version byte (none corrupted) | NFR-MNT-02, FR-COM-12 | auto (2 threads) | `testing/subsystem1/test_comms_threads.c` |
 | S1-R05 | nothing discarded in the queue | NFR-MNT-02, FR-COM-12 | auto (2 threads) | `testing/subsystem1/test_comms_threads.c` |
 | S1-R06 | 100000 commands received, in order, none lost | NFR-MNT-02, FR-COM-08 | auto (2 threads) | `testing/subsystem1/test_comms_threads.c` |
 | S1-H10 | Pico W joins WiFi and connects to the broker | FR-COM-02 | bench | `testing/subsystem1/bench/buddy1_mqtt.c` |
@@ -173,6 +218,10 @@ Test IDs never change and are never reused.
 | S1-H13 | broker started late: about 100 queued messages sent after it came up | FR-COM-09, FR-COM-04 | bench | `testing/subsystem1/bench/buddy1_mqtt.c` |
 | S1-H14 | false link-lost events with ack timeout 0.9 s versus 3 s (10.7 min run) | FR-COM-01 | bench | `testing/subsystem1/bench/buddy1_mqtt.c` |
 | S1-H15 | comms_task run time (max and CPU load) printed on the status line | NFR-RTM-03 | bench | `testing/subsystem1/bench/buddy1_mqtt.c` |
+| S1-H20 | binary frames reach the broker; decoded values equal the TX lines on the serial monitor; every frame is 9 bytes; sequence counts 0-15 | Minimum-Bit change, FR-COM-07 | bench | `testing/subsystem1/bench/buddy1_mqtt.c`, `tools/decode_frame.py` |
+| S1-H21 | command bytes 1, 2, 3 (START, STOP, RESET) accepted | Change requirement (binary commands), FR-COM-08 | bench | `tools/make_cmd_files.py` |
+| S1-H22 | bad command files (0, 4, 2 bytes, old text START) rejected and counted | Change requirement (binary commands) | bench | `tools/make_cmd_files.py` |
+| S1-H23 | retained START is ignored after a reconnect (real broker) | Version C: stale/retained START | bench | `tools/make_cmd_files.py` |
 
 *Method:* **auto** = a check in the test program, result printed on the console. **auto (fakes)** = PC test where the platform, WiFi and broker are replaced by fakes in `testing/subsystem1/stubs/`; it checks the logic only, not the real radio or broker. **auto (2 threads)** = two PC threads share the inbox and the command ring. **manual (Pico W)** and **bench** = run on the Pico W with real WiFi and a real Mosquitto broker. *robustness* means the test protects against bad input and does not map to one requirement.
 
@@ -195,12 +244,16 @@ Add a new row for every run. Never edit or delete old rows.
 | 2026-10-16 | S1-H10 to S1-H13 | `b999c89` | Sarfaraz | PASS | `logs/2026-10-16_bench_sub.txt` (broker side: messages received). Commands and queue backlog were seen on the serial monitor, not saved as a file | one run per condition; plain TCP, anonymous broker, `bat` is a fake 7420 |
 | 2026-10-16 | S1-H14 | `b999c89` | Sarfaraz | PASS with limit | serial monitor output, not saved as a file | 0.9 s: false link-lost about every 40 s. 3 s: 1 event in 10.7 min (about 16 expected). One run only. Serial capture started at 39 s |
 | 2026-10-16 | S1-H15 | `b999c89` | Sarfaraz | PASS | serial monitor output, not saved as a file | normal at most about 1.1 ms; worst 15.2 ms seen once (connect attempt with broker off) |
+| 2026-11-01 | S1-U01 to S1-U15, S1-U20 to S1-U46, S1-S01 to S1-S14, S1-C01 to S1-C57, S1-D01 to S1-D15, S1-R01 to S1-R06, S1-B01 to S1-B22, S1-L01, S1-F01 to S1-F09, S1-V01 to S1-V13 | `(fill in after commit)` | Sarfaraz | PASS (all 11 programs) | `logs/2026-11-01_pc_tests.txt` (save the output of `sh testing/subsystem1/run_pc_tests.sh`) | PC, gcc, ASan/UBSan, fakes. Binary frame and 1-byte commands. S1-D rewritten for binary commands, S1-U08/U09 changed to the 9-byte frame. S1-U50 to S1-U61 and S1-T01 to S1-T10 retired. x86 only, does not prove the memory barriers |
 
 ## Not yet tested
 - Link-loss fix (3 s ack timeout): tested in one 10.7 minute run only. Repeat it once more.
 - NFR-PRF-05 (99% delivery, latency under 500 ms) and NFR-REL-03 (reconnect within 15 s in 95% of trials): need repeated runs.
 - NFR-SEC-01 and NFR-SEC-02 (authentication, TLS): not implemented. The bench broker is anonymous and plain TCP.
 - NFR-STD-02 (keep-alive 1 s): the code uses 10 s plus a 3 s ack timeout. The requirement text must be changed.
-- FR-COM-07 / FR-COM-13: `bat` is 0 in the real car because no battery source exists yet. The bench uses a fake 7420.
-- QoS 1 can deliver a duplicate after a reconnect. The receiver should ignore a repeated `ts`.
+- FR-COM-07 / FR-COM-13: the binary frame no longer carries battery voltage, distance or a timestamp (Minimum-Bit change, Version B). The low-battery status bit is set by the caller.
+- QoS 1 can deliver a duplicate after a reconnect. The frame has no timestamp now, so the receiver should ignore a repeated sequence number (4 bits, wraps every 16).
 - Memory-barrier rules (write data before the index; read data before freeing the slot): checked by reading the code only. The PC thread test cannot prove them.
+- Binary version on the Pico W (S1-H20 to S1-H23): not run yet. Until then the binary frame and 1-byte commands are tested on a PC with fakes only.
+- The 300 ms command settle time after a subscribe (COMMS_CMD_SETTLE_MS) means a real command sent in that window is ignored. Not measured on the bench.
+- Barr C coding standard (NFR-STD-01): not checked against the standard document.

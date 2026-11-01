@@ -1,108 +1,115 @@
-/*
- * telemetry.c  --  Buddy 1 (WiFi / communication / telemetry)
- * See telemetry.h.
- */
+/* telemetry.c -- Buddy 1. Pack/unpack with masks and shifts (no C bit-fields). */
 #include "telemetry.h"
-#include <stddef.h>   /* NULL; this .c file does not include any kernel header */
 
-
-/* A state name may only contain letters, digits and '_'. That keeps the
- * message valid JSON (no quotes or backslashes can sneak in). */
-static int state_is_valid(const char *name)
+/* Put a value into the word / read it back (shift and width come from data_layout.h). */
+static void put(uint64_t *w, uint32_t v, uint32_t shift, uint32_t bits)
 {
-    size_t i;
-
-    for (i = 0u; i < TELEM_STATE_MAX; i++) {
-        char c = name[i];
-
-        if (c == '\0') {
-            return (i > 0u) ? 1 : 0;        /* empty name is not allowed */
-        }
-        if (!(((c >= 'A') && (c <= 'Z')) ||
-              ((c >= 'a') && (c <= 'z')) ||
-              ((c >= '0') && (c <= '9')) ||
-              (c == '_'))) {
-            return 0;
-        }
-    }
-    return 0;                               /* no end marker found */
+    *w |= ((uint64_t)v & dl_mask(bits)) << shift;
 }
 
-/* ---- tiny text writer: no snprintf, because the micro T-Kernel image has no
- * C library system calls (snprintf pulls in _sbrk, _write, ... and the link
- * fails). 'len' counts the characters the message WOULD have, even past the
- * end of the buffer, exactly like snprintf's return value. ---- */
-typedef struct {
-    char     *buf;
-    uint32_t  size;
-    uint32_t  len;
-} out_t;
-
-static void put_char(out_t *o, char c)
+static uint32_t get(uint64_t w, uint32_t shift, uint32_t bits)
 {
-    if ((o->len + 1u) < o->size) {          /* keep room for the end marker */
-        o->buf[o->len] = c;
-    }
-    o->len++;
+    return (uint32_t)((w >> shift) & dl_mask(bits));
 }
 
-static void put_str(out_t *o, const char *s)
+static int angle_ok(int16_t a)
 {
-    while (*s != '\0') {
-        put_char(o, *s);
-        s++;
-    }
+    return (a == TELEM_ANGLE_INVALID) || ((a >= DL_TILT_MIN_DEG) && (a <= DL_TILT_MAX_DEG));
 }
 
-static void put_u32(out_t *o, uint32_t v)
+static uint32_t angle_enc(int16_t a)
 {
-    char tmp[10];
-    int  n = 0;
-    do {
-        tmp[n++] = (char)('0' + (v % 10u));
-        v /= 10u;
-    } while (v != 0u);
-    while (n > 0) {
-        put_char(o, tmp[--n]);
-    }
+    return (a == TELEM_ANGLE_INVALID) ? DL_TILT_INVALID : (uint32_t)(a + DL_TILT_OFFSET);
 }
 
-static void put_i32(out_t *o, int32_t v)
+static int16_t angle_dec(uint32_t v)
 {
-    if (v < 0) {
-        put_char(o, '-');
-        put_u32(o, 0u - (uint32_t)v);       /* also right for INT32_MIN */
-    } else {
-        put_u32(o, (uint32_t)v);
-    }
+    return (v == DL_TILT_INVALID) ? TELEM_ANGLE_INVALID : (int16_t)((int32_t)v - DL_TILT_OFFSET);
 }
 
-int telemetry_format(const telemetry_sample_t *s, char *buf, uint32_t size)
+/* Every field must be inside its range (or be its invalid code). */
+static int flags_ok(const telemetry_sample_t *s)
 {
-    out_t o;
+    return (s->error <= 1u) && (s->wifi_loss <= 1u) && (s->low_batt <= 1u) &&
+           (s->drop <= 1u) && (s->hump <= 1u) && (s->bc_err <= 1u);
+}
 
-    if ((s == NULL) || (buf == NULL) || (size == 0u)) {
+static int fields_ok(const telemetry_sample_t *s)
+{
+    if (!flags_ok(s) || (s->state > DL_STATE_MAX) || (s->bc_dir > DL_BC_DIR_MAX) || (s->line > DL_LINE_MAX) || (s->seq > DL_SEQ_MAX)) {
+        return 0;
+    }
+    if ((s->speed > DL_SPEED_INVALID) || (s->dist > DL_DIST_INVALID)) { return 0; }
+    /* 360..510 would fit in 9 bits but is not a valid direction */
+    if ((s->dir > DL_DIR_MAX_DEG) && (s->dir != DL_DIR_INVALID)) { return 0; }
+    if ((s->hump_h > DL_HUMP_H_MAX_MM) && (s->hump_h != DL_HUMP_H_INVALID)) { return 0; }
+    return angle_ok(s->tilt) && angle_ok(s->roll);
+}
+
+int telemetry_pack(const telemetry_sample_t *s, uint8_t *out, uint32_t size)
+{
+    uint64_t w = 0u;
+    uint32_t i;
+
+    if ((!s) || (!out) || (size < DL_FRAME_BYTES)) { return TELEM_ERR_ARG; }
+
+    if (!fields_ok(s)) { return TELEM_ERR_RANGE; }
+
+    put(&w, s->state, DL_STATE_SHIFT, DL_STATE_BITS);
+    put(&w, s->error, DL_ERROR_SHIFT, DL_ERROR_BITS);
+    put(&w, s->wifi_loss, DL_WIFI_LOSS_SHIFT, DL_WIFI_LOSS_BITS);
+    put(&w, s->low_batt, DL_LOW_BATT_SHIFT, DL_LOW_BATT_BITS);
+    put(&w, s->drop, DL_DROP_SHIFT, DL_DROP_BITS);
+    put(&w, s->hump, DL_HUMP_SHIFT, DL_HUMP_BITS);
+    put(&w, s->speed, DL_SPEED_SHIFT, DL_SPEED_BITS);
+    put(&w, s->bc_dir, DL_BC_DIR_SHIFT, DL_BC_DIR_BITS);
+    put(&w, s->bc_err, DL_BC_ERR_SHIFT, DL_BC_ERR_BITS);
+    put(&w, s->line, DL_LINE_SHIFT, DL_LINE_BITS);
+    put(&w, s->dist, DL_DIST_SHIFT, DL_DIST_BITS);
+    put(&w, s->dir, DL_DIR_SHIFT, DL_DIR_BITS);
+    put(&w, s->hump_h, DL_HUMP_H_SHIFT, DL_HUMP_H_BITS);
+    put(&w, angle_enc(s->tilt), DL_TILT_SHIFT, DL_TILT_BITS);
+    put(&w, angle_enc(s->roll), DL_ROLL_SHIFT, DL_ROLL_BITS);
+    put(&w, s->seq, DL_SEQ_SHIFT, DL_SEQ_BITS);
+
+    out[0] = (uint8_t)DL_VERSION;
+    for (i = 0u; i < DL_PAYLOAD_BYTES; i++) {
+        out[1u + i] = (uint8_t)(w >> (DL_BITS_PER_BYTE * i));      /* little-endian */
+    }
+    return TELEM_OK;
+}
+
+int telemetry_unpack(const uint8_t *in, uint32_t len, telemetry_sample_t *s)
+{
+    uint64_t w = 0u;
+    uint32_t i;
+
+    if ((!in) || (!s) || (len != DL_FRAME_BYTES) || (in[0] != DL_VERSION)) {
         return TELEM_ERR_ARG;
     }
-    if (!state_is_valid(s->state)) {
-        return TELEM_ERR_ARG;
-    }
+    for (i = 0u; i < DL_PAYLOAD_BYTES; i++) { w |= (uint64_t)in[1u + i] << (DL_BITS_PER_BYTE * i); }
 
-    o.buf = buf;
-    o.size = size;
-    o.len = 0u;
-    put_str(&o, "{\"ts\":");     put_u32(&o, s->ts_ms);
-    put_str(&o, ",\"state\":\""); put_str(&o, s->state);
-    put_str(&o, "\",\"spd\":");  put_i32(&o, s->speed_mm_s);
-    put_str(&o, ",\"dist\":");   put_i32(&o, s->distance_mm);
-    put_str(&o, ",\"hdg\":");    put_i32(&o, (int32_t)s->heading_deg_x10);
-    put_str(&o, ",\"bat\":");    put_u32(&o, (uint32_t)s->battery_mv);
-    put_char(&o, '}');
+    s->state = (uint8_t)get(w, DL_STATE_SHIFT, DL_STATE_BITS);
+    s->error = (uint8_t)get(w, DL_ERROR_SHIFT, DL_ERROR_BITS);
+    s->wifi_loss = (uint8_t)get(w, DL_WIFI_LOSS_SHIFT, DL_WIFI_LOSS_BITS);
+    s->low_batt = (uint8_t)get(w, DL_LOW_BATT_SHIFT, DL_LOW_BATT_BITS);
+    s->drop = (uint8_t)get(w, DL_DROP_SHIFT, DL_DROP_BITS);
+    s->hump = (uint8_t)get(w, DL_HUMP_SHIFT, DL_HUMP_BITS);
+    s->speed = (uint8_t)get(w, DL_SPEED_SHIFT, DL_SPEED_BITS);
+    s->bc_dir = (uint8_t)get(w, DL_BC_DIR_SHIFT, DL_BC_DIR_BITS);
+    s->bc_err = (uint8_t)get(w, DL_BC_ERR_SHIFT, DL_BC_ERR_BITS);
+    s->line = (uint8_t)get(w, DL_LINE_SHIFT, DL_LINE_BITS);
+    s->dist = (uint8_t)get(w, DL_DIST_SHIFT, DL_DIST_BITS);
+    s->dir = (uint16_t)get(w, DL_DIR_SHIFT, DL_DIR_BITS);
+    s->hump_h = (uint8_t)get(w, DL_HUMP_H_SHIFT, DL_HUMP_H_BITS);
+    s->seq = (uint8_t)get(w, DL_SEQ_SHIFT, DL_SEQ_BITS);
+    s->tilt = angle_dec(get(w, DL_TILT_SHIFT, DL_TILT_BITS));
+    s->roll = angle_dec(get(w, DL_ROLL_SHIFT, DL_ROLL_BITS));
+    return TELEM_OK;
+}
 
-    buf[(o.len < size) ? o.len : (size - 1u)] = '\0';   /* end marker */
-
-    if ((o.len > TELEM_MSG_MAX) || (o.len >= size)) {
-        return TELEM_ERR_TOO_BIG;           /* too long, or buffer too small */
-    }
-    return (int)o.len;
+uint8_t telemetry_cmd_decode(const uint8_t *in, uint32_t len)
+{
+    if ((!in) || (len != DL_CMD_BYTES)) { return 0u; }
+    return ((in[0] >= DL_CMD_START) && (in[0] <= DL_CMD_RESET)) ? in[0] : 0u;
 }

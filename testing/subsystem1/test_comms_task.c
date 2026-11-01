@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "fake_port.h"
+#include "sample_id.h"
 #include "../../app_program/subsystem1/comms.c"
 
 static int fails = 0;
@@ -46,17 +47,16 @@ static void broker_accept(void) { fk_conn_cb(&fk_client, NULL, MQTT_CONNECT_ACCE
 static void broker_ack(err_t e) { fk_pub_cb(fk_pub_arg, e); }
 static uint32_t pub_ts(void)
 {
-    unsigned t = 0;
-    sscanf(fk_pub_payload, "{\"ts\":%u", &t);
+    uint32_t t = 0;
+    (void)sid_get(fk_pub_payload, fk_pub_len, &t);
     return t;
 }
 static int send_ts(uint32_t ts)
 {
     telemetry_sample_t s;
     memset(&s, 0, sizeof s);
-    s.ts_ms = ts;
-    strcpy(s.state, "TEST");
-    s.speed_mm_s = 250;
+    s.state = DL_STATE_LINE_FOLLOWING;
+    sid_set(&s, ts);
     return comms_send(&s);
 }
 static uint16_t queued(void) { comms_stats_t st; comms_get_stats(&st); return st.queued; }
@@ -233,8 +233,10 @@ int main(void)
     }
 
     /* ---- L: commands while sending ---- */
-    inpub_cb(NULL, COMMS_TOPIC_CMD, 4);
-    indata_cb(NULL, (const u8_t *)"STOP", 4, MQTT_DATA_FLAG_LAST);
+    step(COMMS_CMD_SETTLE_MS + 50u);        /* commands are ignored for 300 ms after a subscribe */
+    { uint8_t stop = DL_CMD_STOP;
+      inpub_cb(NULL, COMMS_TOPIC_CMD, 1);
+      indata_cb(NULL, &stop, 1, MQTT_DATA_FLAG_LAST); }
     CHECK(comms_get_command() == COMMS_CMD_STOP, "command received while sending telemetry");
 
     /* ---- M: bad arguments ---- */

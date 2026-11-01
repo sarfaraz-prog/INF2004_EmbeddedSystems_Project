@@ -15,10 +15,11 @@
  * The numbers are an upper bound: background WiFi work can interrupt the
  * measurement.
  *
- * The sample values below are FAKE. In the real car they come from the other
+ * The sample values below are FAKE and are sent as the 9-byte binary frame (data_layout.h). In the real car they come from the other
  * buddies (Odometry, IMU, Nav, Safety). See COMMS_FORMAT.md.
  *
- * Needs wifi_secrets.h in this folder. It is private and is not committed.
+ * Needs bench/wifi_secrets.h (copy wifi_secrets.example.h and fill it in).
+ * It is private and is not committed.
  */
 #include <stdio.h>
 #include <string.h>
@@ -51,16 +52,19 @@ static const char *cmd_name(comms_cmd_t c)
     }
 }
 
-/* Fake data standing in for the other buddies. */
-static void fill_fake_sample(telemetry_sample_t *s, bool running)
+/* Fake data standing in for the other buddies. Values move every second so the
+ * laptop decoder shows them changing. Units and ranges: data_layout.h. */
+static void fill_fake_sample(telemetry_sample_t *s, bool running, uint32_t n)
 {
     memset(s, 0, sizeof *s);
-    s->ts_ms = comms_now_ms();
-    strcpy(s->state, running ? "LINE_FOLLOW" : "IDLE");
-    s->speed_mm_s = running ? 250 : 0;
-    s->distance_mm = (int32_t)(s->ts_ms / 4u);
-    s->heading_deg_x10 = 905;
-    s->battery_mv = 7420;
+    s->state  = running ? DL_STATE_LINE_FOLLOWING : DL_STATE_CALIBRATE;
+    s->speed  = running ? (uint8_t)(20u + n % 10u) : 0u;        /* cm/s */
+    s->dist   = (uint8_t)(10u + (n * 3u) % 50u);                /* cm */
+    s->dir    = (uint16_t)((n * 15u) % 360u);                   /* degrees */
+    s->hump_h = DL_HUMP_H_INVALID;                              /* no reading */
+    s->tilt   = (int16_t)(((int32_t)(n % 7u) - 3) * 5);         /* -15..15 degrees */
+    s->roll   = TELEM_ANGLE_INVALID;                            /* no reading */
+    s->line   = (uint8_t)(n % 4u);
 }
 
 int main(void)
@@ -88,6 +92,7 @@ int main(void)
     bool running = true;               /* stands in for Nav's state */
     uint32_t next_sample = SAMPLE_MS;
     uint32_t next_report = SAMPLE_MS;
+    uint32_t n_sample = 0;            /* sample number, for the fake values */
     uint32_t win_max_us = 0;          /* longest comms_task() call this second */
     uint32_t all_max_us = 0;          /* longest since power-up */
     uint64_t win_total_us = 0;        /* time spent in comms_task() this second */
@@ -99,8 +104,13 @@ int main(void)
         /* 1 Hz: queue a sample (the car's code would do this) */
         if (now >= next_sample) {
             telemetry_sample_t s;
-            fill_fake_sample(&s, running);
-            (void)comms_send(&s);
+            fill_fake_sample(&s, running, n_sample);
+            int r = comms_send(&s);
+            /* what we meant to send: compare with the laptop decoder output */
+            printf("[%6lu ms] TX state=%u speed=%u dist=%u dir=%u tilt=%d line=%u  (send=%d)\n",
+                   (unsigned long)now, (unsigned)s.state, (unsigned)s.speed, (unsigned)s.dist,
+                   (unsigned)s.dir, (int)s.tilt, (unsigned)s.line, r);
+            n_sample++;
             next_sample += SAMPLE_MS;
         }
 

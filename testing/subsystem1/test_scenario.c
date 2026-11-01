@@ -21,7 +21,7 @@ static int g_fail = 0;
         }                                                                  \
     } while (0)
 
-/* What the pretend broker received, in arrival order (the "ts" of each). */
+/* What the pretend broker received, in arrival order (the sample number of each). */
 #define BROKER_MAX 400
 static unsigned long g_broker[BROKER_MAX];
 static unsigned g_broker_n = 0;
@@ -33,21 +33,16 @@ static unsigned long g_next_ts = 1;
 static void take_sample(void)
 {
     telemetry_sample_t s;
-    char buf[TELEM_MSG_MAX];
-    int n;
+    uint8_t buf[DL_FRAME_BYTES];
 
     memset(&s, 0, sizeof s);
-    s.ts_ms = (uint32_t)g_next_ts;
-    strcpy(s.state, "FOLLOW_LINE");
-    s.speed_mm_s = 250;
-    s.distance_mm = 1000;
-    s.heading_deg_x10 = 900;
-    s.battery_mv = 7400;
+    s.state = DL_STATE_LINE_FOLLOWING;
+    s.speed = (uint8_t)(g_next_ts / 63u);      /* the frame has no timestamp, so the */
+    s.dist  = (uint8_t)(g_next_ts % 63u);      /* sample number rides in speed + dist */
     g_next_ts++;
 
-    n = telemetry_format(&s, buf, sizeof buf);
-    if (n > 0) {
-        (void)tq_push((const uint8_t *)buf, (uint16_t)n);
+    if (telemetry_pack(&s, buf, sizeof buf) == TELEM_OK) {
+        (void)tq_push(buf, (uint16_t)sizeof buf);
     }
 }
 
@@ -66,10 +61,9 @@ static com_state_t tick(bool wifi, bool mqtt)
     st = com_update(&in);
 
     if (wifi && mqtt && tq_peek_oldest(&m) == TQ_OK) {
-        unsigned long ts = 0;
-        if (sscanf((const char *)m.data, "{\"ts\":%lu", &ts) == 1 &&
-            g_broker_n < BROKER_MAX) {
-            g_broker[g_broker_n++] = ts;
+        telemetry_sample_t d;
+        if (telemetry_unpack(m.data, m.len, &d) == TELEM_OK && g_broker_n < BROKER_MAX) {
+            g_broker[g_broker_n++] = (unsigned long)d.speed * 63u + d.dist;
         }
         (void)tq_ack_oldest(m.seq);
     }
