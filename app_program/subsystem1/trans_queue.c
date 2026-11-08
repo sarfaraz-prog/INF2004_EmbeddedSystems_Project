@@ -1,7 +1,7 @@
 /*
  * trans_queue.c 
  * Offline telemetry queue (ring buffer). See trans_queue.h.
- * Statically allocated: 100 x 264 bytes (NFR-RES-03).
+ * Statically allocated: 100 x 16 bytes (NFR-RES-03).
  * Not thread-safe by itself: the caller holds a mutex (NFR-MNT-02).
  */
 #include "trans_queue.h"

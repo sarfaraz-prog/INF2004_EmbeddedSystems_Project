@@ -54,4 +54,4 @@ Results are in `testing/subsystem1/TEST_LOG.md`.
   connect attempt with the broker off (see `testing/subsystem1/TEST_LOG.md`).
 - A command sent in the first 300 ms after the car subscribes is ignored on purpose
   (stale retained START). Resend it.
-- Hump height unit and range are placeholders until the ramp is measured.
+- Hump jolt unit and range are placeholders until the ramp is measured.

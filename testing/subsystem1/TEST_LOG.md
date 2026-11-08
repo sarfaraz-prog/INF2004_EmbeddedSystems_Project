@@ -170,7 +170,7 @@ Test IDs never change and are never reused.
 | S1-B07 | speed 64 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
 | S1-B08 | distance 64 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
 | S1-B09 | direction 360 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
-| S1-B10 | hump height 129 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
+| S1-B10 | hump jolt 129 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
 | S1-B11 | tilt 181 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
 | S1-B12 | roll -181 rejected | Version C: tests at field limits | auto | `testing/subsystem1/test_telemetry.c` |
 | S1-B13 | sequence 16 rejected | Version C: sequence number | auto | `testing/subsystem1/test_telemetry.c` |
